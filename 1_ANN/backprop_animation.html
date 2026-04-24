@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forward & Backpropagation — Interactive</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #0f1117;
+  color: #c9d1d9;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Left sticky panel ── */
+#viz-panel {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 46%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #161b22;
+  border-right: 1px solid #30363d;
+  padding: 24px 20px;
+  gap: 14px;
+}
+
+#step-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #58a6ff;
+  text-align: center;
+}
+
+svg#net {
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+#formula-display {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 13px 20px;
+  font-size: 1rem;
+  text-align: center;
+  min-height: 50px;
+  width: 100%;
+  max-width: 420px;
+  color: #e6edf3;
+  transition: opacity 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Right scroll panel ── */
+#scroll-panel {
+  width: 54%;
+  min-height: 100vh;
+}
+
+.spacer { height: 15vh; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 24px 44px;
+  border-bottom: 1px solid #21262d;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  color: #8b949e;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.phase-header {
+  padding: 44px 44px 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #58a6ff;
+}
+
+.step-block {
+  min-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 56px 44px;
+  border-bottom: 1px solid #21262d;
+  transition: background 0.4s;
+}
+
+.step-block.active {
+  background: #161b22;
+}
+
+.step-block h3 {
+  font-size: 1.25rem;
+  color: #e6edf3;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+.step-block p {
+  font-size: 0.97rem;
+  line-height: 1.75;
+  color: #8b949e;
+  margin-bottom: 20px;
+}
+
+.formula-block {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-left: 3px solid #58a6ff;
+  border-radius: 4px;
+  padding: 14px 18px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95rem;
+  color: #e6edf3;
+  line-height: 1.6;
+}
+
+.formula-block .sub  { font-size: 0.75em; vertical-align: sub; }
+.formula-block .sup  { font-size: 0.75em; vertical-align: super; }
+
+/* progress dots */
+#progress {
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #30363d;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.3s;
+}
+
+.dot.active {
+  background: #58a6ff;
+  transform: scale(1.4);
+}
+
+/* back link */
+#back-link {
+  display: block;
+  padding: 16px 44px;
+  font-size: 0.82rem;
+  color: #58a6ff;
+  text-decoration: none;
+  opacity: 0.7;
+}
+#back-link:hover { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ── Left panel ── -->
+<div id="viz-panel">
+  <div id="step-label">Scroll to begin &rarr;</div>
+
+  <svg id="net" viewBox="0 0 560 460" width="460" height="380">
+    <defs>
+      <!-- glow filters -->
+      <filter id="glow-blue"   x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="glow-red"    x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="glow-green"  x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="glow-gold"   x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="glow-purple" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <g id="edge-layer"></g>
+    <g id="node-layer"></g>
+    <g id="label-layer"></g>
+  </svg>
+
+  <div id="formula-display">—</div>
+</div>
+
+<!-- ── Right panel ── -->
+<div id="scroll-panel">
+  <div class="spacer"></div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#42A5F5"></div>Activations (forward)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#EF5350"></div>Output / Loss</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#66BB6A"></div>&part;E/&part;y &nbsp;(green)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FFB74D"></div>&part;E/&part;x &nbsp;(gold)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#CE93D8"></div>&part;E/&part;w &nbsp;(purple)</div>
+  </div>
+
+  <div id="steps-container"></div>
+  <div class="spacer"></div>
+</div>
+
+<!-- Progress dots -->
+<div id="progress"></div>
+
+<script>
+// ─── Network layout ──────────────────────────────────────────────────────────
+const NODES = {
+  i0:  { cx: 70,  cy: 230, label: 'x' },
+  h10: { cx: 210, cy: 120, label: 'H\u2081\u2090' },
+  h11: { cx: 210, cy: 340, label: 'H\u2081\u1D47' },
+  h20: { cx: 360, cy: 120, label: 'H\u2082\u2090' },
+  h21: { cx: 360, cy: 340, label: 'H\u2082\u1D47' },
+  o0:  { cx: 490, cy: 230, label: '\u0177' },
+};
+
+const EDGES = [
+  { id: 'e_i0_h10',  from: 'i0',  to: 'h10' },
+  { id: 'e_i0_h11',  from: 'i0',  to: 'h11' },
+  { id: 'e_h10_h20', from: 'h10', to: 'h20' },
+  { id: 'e_h10_h21', from: 'h10', to: 'h21' },
+  { id: 'e_h11_h20', from: 'h11', to: 'h20' },
+  { id: 'e_h11_h21', from: 'h11', to: 'h21' },
+  { id: 'e_h20_o0',  from: 'h20', to: 'o0'  },
+  { id: 'e_h21_o0',  from: 'h21', to: 'o0'  },
+];
+
+const R = 30;
+
+// ─── Color palettes ──────────────────────────────────────────────────────────
+const NODE_C = {
+  default: { fill: '#1c2128', stroke: '#444c56', w: 1.5, glow: null   },
+  blue:    { fill: '#0d419d', stroke: '#42A5F5', w: 2.5, glow: 'blue'   },
+  red:     { fill: '#7f1d1d', stroke: '#EF5350', w: 2.5, glow: 'red'    },
+  green:   { fill: '#14532d', stroke: '#66BB6A', w: 2.5, glow: 'green'  },
+  gold:    { fill: '#7c2d12', stroke: '#FFB74D', w: 2.5, glow: 'gold'   },
+  purple:  { fill: '#3b0764', stroke: '#CE93D8', w: 2.5, glow: 'purple' },
+};
+
+const EDGE_C = {
+  default: { stroke: '#2d333b', w: 1.5, glow: null     },
+  blue:    { stroke: '#42A5F5', w: 2.5, glow: 'blue'   },
+  purple:  { stroke: '#CE93D8', w: 2.5, glow: 'purple' },
+};
+
+// ─── Steps ───────────────────────────────────────────────────────────────────
+const STEPS = [
+  // ── Forward pass ──
+  {
+    phase: 'Forward Pass',
+    title: '1. Input',
+    text: 'The network receives a single input value <strong style="color:#42A5F5">x</strong>. The input node has no activation function — it simply passes its value downstream into the first hidden layer.',
+    formula: 'y<sub>input</sub> = x',
+    nodes: { i0: 'blue' },
+    edges: {},
+  },
+  {
+    title: '2. Weighted sum — Hidden Layer 1',
+    text: 'Each neuron in hidden layer 1 collects signals from all upstream nodes. It multiplies each incoming activation by a learned weight, sums them up, and adds a bias term.',
+    formula: 'x<sub>j</sub> = &sum;<sub>i &isin; in(j)</sub> w<sub>ij</sub> &middot; y<sub>i</sub> + b<sub>j</sub>',
+    nodes: { i0: 'blue', h10: 'blue', h11: 'blue' },
+    edges: { e_i0_h10: 'blue', e_i0_h11: 'blue' },
+  },
+  {
+    title: '3. Activation — Hidden Layer 1',
+    text: 'The weighted sum x<sub>j</sub> is passed through a <strong>non-linear activation function</strong> (e.g. Sigmoid or ReLU) to produce the node\'s output y<sub>j</sub>. Non-linearity is what allows the network to learn complex patterns.',
+    formula: 'y<sub>j</sub> = f(x<sub>j</sub>) = &sigma;(x<sub>j</sub>)',
+    nodes: { i0: 'blue', h10: 'blue', h11: 'blue' },
+    edges: { e_i0_h10: 'blue', e_i0_h11: 'blue' },
+  },
+  {
+    title: '4. Hidden Layer 2',
+    text: 'Layer 2 repeats the exact same two-step process — weighted sum then activation — using the outputs from layer 1 as its inputs. This is the essence of <em>deep</em> learning: stacking these transformations.',
+    formula: 'x<sub>j</sub> = &sum; w<sub>ij</sub>y<sub>i</sub> + b<sub>j</sub> &nbsp;&rarr;&nbsp; y<sub>j</sub> = f(x<sub>j</sub>)',
+    nodes: { i0: 'blue', h10: 'blue', h11: 'blue', h20: 'blue', h21: 'blue' },
+    edges: { e_i0_h10: 'blue', e_i0_h11: 'blue', e_h10_h20: 'blue', e_h10_h21: 'blue', e_h11_h20: 'blue', e_h11_h21: 'blue' },
+  },
+  {
+    title: '5. Output & Loss',
+    text: 'The output layer produces the prediction <strong style="color:#EF5350">ŷ</strong>. We then compute the <strong>loss</strong> — how far the prediction is from the true target. This single number is what we want to minimise.',
+    formula: 'E = &frac12;(&ycirc; &minus; y<sub>target</sub>)<sup>2</sup>',
+    nodes: { i0: 'blue', h10: 'blue', h11: 'blue', h20: 'blue', h21: 'blue', o0: 'red' },
+    edges: { e_i0_h10: 'blue', e_i0_h11: 'blue', e_h10_h20: 'blue', e_h10_h21: 'blue', e_h11_h20: 'blue', e_h11_h21: 'blue', e_h20_o0: 'blue', e_h21_o0: 'blue' },
+  },
+
+  // ── Backward pass ──
+  {
+    phase: 'Backward Pass',
+    title: '6. Error at output: \u2202E/\u2202y',
+    text: 'Backpropagation begins at the output. We ask: <em>how does the error change when the output activation changes?</em> This <strong style="color:#66BB6A">green</strong> signal is the simplest derivative — just the difference between prediction and target.',
+    formula: '&part;E / &part;y<sub>out</sub> = &ycirc; &minus; y<sub>target</sub>',
+    nodes: { o0: 'green' },
+    edges: {},
+  },
+  {
+    title: '7. Chain rule through activation: \u2202E/\u2202x',
+    text: 'Using the <strong>chain rule</strong>, we propagate the gradient back through the activation function. This gives us how the error changes with respect to the pre-activation input x — the <strong style="color:#FFB74D">gold</strong> signal.',
+    formula: '&part;E / &part;x = f&prime;(x) &middot; &part;E / &part;y',
+    nodes: { o0: 'gold' },
+    edges: {},
+  },
+  {
+    title: '8. Weight gradients: \u2202E/\u2202w',
+    text: 'The gradient for each weight is the product of the upstream gold signal and the incoming activation. These gradients appear on the edges in <strong style="color:#CE93D8">purple</strong> — they tell us exactly how to nudge each weight to reduce error.',
+    formula: '&part;E / &part;w<sub>ij</sub> = y<sub>i</sub> &middot; &part;E / &part;x<sub>j</sub>',
+    nodes: { h20: 'gold', h21: 'gold', o0: 'gold' },
+    edges: { e_h20_o0: 'purple', e_h21_o0: 'purple' },
+  },
+  {
+    title: '9. Propagate error to Hidden Layer 2',
+    text: 'The error signal travels backward through the weights. Each node in layer 2 accumulates gradient contributions from every node it fed into, producing a new <strong style="color:#66BB6A">green</strong> signal.',
+    formula: '&part;E / &part;y<sub>i</sub> = &sum;<sub>j</sub> w<sub>ij</sub> &middot; &part;E / &part;x<sub>j</sub>',
+    nodes: { h20: 'green', h21: 'green', o0: 'gold' },
+    edges: { e_h20_o0: 'purple', e_h21_o0: 'purple' },
+  },
+  {
+    title: '10. Propagate all the way back',
+    text: 'The same green &rarr; gold &rarr; purple cycle repeats for every layer until we reach the input. Each layer hands off its gradient to the one before it — no layer needs to know the full network.',
+    formula: '&part;E/&part;y<sub>i</sub> = &sum;<sub>j</sub> w<sub>ij</sub> &middot; f&prime;(x<sub>j</sub>) &middot; &part;E/&part;y<sub>j</sub>',
+    nodes: { h10: 'green', h11: 'green', h20: 'gold', h21: 'gold', o0: 'gold' },
+    edges: { e_h10_h20: 'purple', e_h10_h21: 'purple', e_h11_h20: 'purple', e_h11_h21: 'purple', e_h20_o0: 'purple', e_h21_o0: 'purple' },
+  },
+  {
+    title: '11. Update all weights',
+    text: 'Finally, every weight is nudged in the direction that reduces the loss. The learning rate &alpha; controls the step size. Repeat the entire forward + backward loop thousands of times and the network gradually learns.',
+    formula: 'w<sub>ij</sub> &larr; w<sub>ij</sub> &minus; &alpha; &middot; &part;E / &part;w<sub>ij</sub>',
+    nodes: { i0: 'blue', h10: 'blue', h11: 'blue', h20: 'blue', h21: 'blue', o0: 'red' },
+    edges: { e_i0_h10: 'purple', e_i0_h11: 'purple', e_h10_h20: 'purple', e_h10_h21: 'purple', e_h11_h20: 'purple', e_h11_h21: 'purple', e_h20_o0: 'purple', e_h21_o0: 'purple' },
+  },
+];
+
+// ─── Build SVG ───────────────────────────────────────────────────────────────
+const edgeLayer = document.getElementById('edge-layer');
+const nodeLayer = document.getElementById('node-layer');
+const labelLayer = document.getElementById('label-layer');
+
+EDGES.forEach(e => {
+  const n1 = NODES[e.from], n2 = NODES[e.to];
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  el.setAttribute('id', e.id);
+  el.setAttribute('x1', n1.cx); el.setAttribute('y1', n1.cy);
+  el.setAttribute('x2', n2.cx); el.setAttribute('y2', n2.cy);
+  el.setAttribute('stroke', EDGE_C.default.stroke);
+  el.setAttribute('stroke-width', EDGE_C.default.w);
+  el.style.transition = 'stroke 0.45s ease, stroke-width 0.45s ease, filter 0.45s ease';
+  edgeLayer.appendChild(el);
+});
+
+Object.entries(NODES).forEach(([id, n]) => {
+  const c = NODE_C.default;
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('id', 'node-' + id);
+  circle.setAttribute('cx', n.cx); circle.setAttribute('cy', n.cy);
+  circle.setAttribute('r', R);
+  circle.setAttribute('fill', c.fill);
+  circle.setAttribute('stroke', c.stroke);
+  circle.setAttribute('stroke-width', c.w);
+  circle.style.transition = 'fill 0.45s ease, stroke 0.45s ease, filter 0.45s ease';
+  nodeLayer.appendChild(circle);
+
+  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  text.setAttribute('x', n.cx); text.setAttribute('y', n.cy + 5);
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('font-size', '13');
+  text.setAttribute('fill', '#8b949e');
+  text.setAttribute('font-family', 'Segoe UI, sans-serif');
+  text.setAttribute('pointer-events', 'none');
+  text.textContent = n.label;
+  labelLayer.appendChild(text);
+});
+
+// ─── Build step HTML ─────────────────────────────────────────────────────────
+const container = document.getElementById('steps-container');
+const progressEl = document.getElementById('progress');
+
+STEPS.forEach((step, i) => {
+  if (step.phase) {
+    const ph = document.createElement('div');
+    ph.className = 'phase-header';
+    ph.textContent = '— ' + step.phase + ' —';
+    container.appendChild(ph);
+  }
+
+  const div = document.createElement('div');
+  div.className = 'step-block';
+  div.dataset.index = i;
+  div.innerHTML =
+    '<h3>' + step.title + '</h3>' +
+    '<p>' + step.text + '</p>' +
+    '<div class="formula-block">' + step.formula + '</div>';
+  container.appendChild(div);
+
+  // progress dot
+  const dot = document.createElement('div');
+  dot.className = 'dot';
+  dot.dataset.index = i;
+  dot.title = step.title;
+  dot.addEventListener('click', () => {
+    document.querySelectorAll('.step-block')[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  progressEl.appendChild(dot);
+});
+
+// ─── Apply visual state ───────────────────────────────────────────────────────
+function applyState(idx) {
+  const step = STEPS[idx];
+
+  Object.keys(NODES).forEach(id => {
+    const el = document.getElementById('node-' + id);
+    const c = NODE_C.default;
+    el.setAttribute('fill', c.fill);
+    el.setAttribute('stroke', c.stroke);
+    el.setAttribute('stroke-width', c.w);
+    el.removeAttribute('filter');
+  });
+
+  EDGES.forEach(e => {
+    const el = document.getElementById(e.id);
+    el.setAttribute('stroke', EDGE_C.default.stroke);
+    el.setAttribute('stroke-width', EDGE_C.default.w);
+    el.removeAttribute('filter');
+  });
+
+  Object.entries(step.nodes || {}).forEach(([id, color]) => {
+    const el = document.getElementById('node-' + id);
+    const c = NODE_C[color];
+    el.setAttribute('fill', c.fill);
+    el.setAttribute('stroke', c.stroke);
+    el.setAttribute('stroke-width', c.w);
+    if (c.glow) el.setAttribute('filter', 'url(#glow-' + c.glow + ')');
+  });
+
+  Object.entries(step.edges || {}).forEach(([id, color]) => {
+    const el = document.getElementById(id);
+    const c = EDGE_C[color];
+    el.setAttribute('stroke', c.stroke);
+    el.setAttribute('stroke-width', c.w);
+    if (c.glow) el.setAttribute('filter', 'url(#glow-' + c.glow + ')');
+  });
+
+  document.getElementById('formula-display').innerHTML = step.formula;
+  document.getElementById('step-label').textContent = step.title;
+
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.classList.toggle('active', i === idx);
+  });
+}
+
+// ─── Intersection Observer ────────────────────────────────────────────────────
+let current = -1;
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const idx = parseInt(entry.target.dataset.index);
+      if (idx !== current) {
+        current = idx;
+        applyState(idx);
+        document.querySelectorAll('.step-block').forEach(el => el.classList.remove('active'));
+        entry.target.classList.add('active');
+      }
+    }
+  });
+}, { threshold: 0.5 });
+
+document.querySelectorAll('.step-block').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+keras
+tensorflow
+streamlit
+numpy
+pandas
+ipykernel

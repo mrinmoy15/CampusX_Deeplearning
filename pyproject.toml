@@ -1,0 +1,13 @@
+[project]
+name = "campusx-deeplearning"
+version = "0.1.0"
+description = "This code base has in depth materials on Deeplearning. It covers in depth topics like ANN, CNN, RNN, GAN, Transformers etc."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "keras>=3.13.2",
+    "numpy>=2.4.2",
+    "pandas>=2.3.3",
+    "streamlit>=1.54.0",
+    "tensorflow>=2.20.0",
+]

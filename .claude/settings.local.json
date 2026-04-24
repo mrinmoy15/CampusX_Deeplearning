@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:jalammar.github.io)",
+      "WebFetch(domain:d2l.ai)"
+    ]
+  }
+}
